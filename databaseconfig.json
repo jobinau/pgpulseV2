@@ -1,0 +1,19 @@
+{
+  "sourceDB":{
+    "title" : "Database from data need to be collected or Monitored",
+    "host":"localhost",
+    "user":"postgres",
+    "passwd":"password123",
+    "db":"postgres",
+    "port":"5432"
+  },
+  "repoDB":{
+    "title" : "Database in which sanpshot information will be stored",
+    "host":"localhost",
+    "user":"postgres",
+    "passwd":"password123",
+    "db":"postgres",
+    "port":"5432",
+    "schema":"pulsesnaps"
+  }
+}
