@@ -1,10 +1,12 @@
 --Schema for using with gather.sql v1
 
-CREATE TABLE pg_connction (
+DROP TABLE pg_gather,pg_get_activity,pg_get_class,pg_get_confs,pg_get_db,pg_get_index,pg_get_tab,pg_get_wait,pg_srvr,get_block,pg_pid_wait;
+
+CREATE TABLE pg_srvr (
     connstr text
 );
 
-CREATE TABLE pg_collection (
+CREATE TABLE pg_gather (
     collect_ts timestamp with time zone,
     usr text,
     db text,
@@ -54,6 +56,13 @@ CREATE TABLE pg_get_wait(
     wait_event text
 );
 
+CREATE TABLE pg_pid_wait(
+    itr SERIAL,
+    pid integer,
+    wait_event text
+);
+
+
 CREATE TABLE pg_get_db (
     datid oid,
     datname text,
@@ -77,8 +86,7 @@ CREATE TABLE pg_get_db (
 CREATE TABLE pg_get_confs (
     name text,
     setting text,
-    unit text,
-    context text
+    unit text
 );
 
 CREATE TABLE pg_get_class (
@@ -93,8 +101,68 @@ CREATE TABLE pg_get_index (
     indrelid oid,
     indisunique boolean,
     indisprimary boolean,
-    numscans bigint
-)
+    numscans bigint,
+    size bigint
+);
+--indexrelid - oid of the index
+--indrelid - oid of the corresponding table
+
+CREATE TABLE pg_get_tab (
+    relid oid,
+    relnamespace oid,
+    rel_size bigint,
+    tab_size bigint,
+    last_vac timestamp with time zone,
+    last_anlyze timestamp with time zone,
+    vac_nos bigint
+);
+
+--rel_size is "main" fork size
+--tab_size includes toast also
+
+CREATE TABLE get_block (
+    blocked_pid integer,
+    blocked_user text,
+    blocked_client_addr text,
+    blocked_client_hostname text,
+    blocked_application_name text,
+    blocked_wait_event_type text,
+    blocked_wait_event text,
+    blocked_statement text,
+    blocked_xact_start timestamp with time zone,
+    blocking_pid integer,
+    blocking_user text,
+    blocking_user_addr text,
+    blocking_client_hostname text,
+    blocking_application_name text,
+    blocking_wait_event_type text,
+    blocking_wait_event text,
+    statement_in_blocking_process text,
+    blocking_xact_start timestamp with time zone
+);
+
+CREATE TABLE pg_replication_stat (
+    usename text,
+    client_addr text,
+    client_hostname text,
+    state text,
+    sent_lsn pg_lsn,
+    write_lsn pg_lsn,
+    flush_lsn pg_lsn,
+    replay_lsn pg_lsn,
+    sync_state text
+);
 
 
--- sed -i '/^Pager/d; /^Tuples/d; /^Output/d; /^SELECT/d' out.txt
+CREATE TABLE pg_tab_bloat (
+    table_oid oid,
+    tablename text,
+    relpages bigint,
+    est_pages bigint
+);
+
+
+
+-- psql -f gather.sql > out.txt
+-- sed -i '/^Pager/d; /^Tuples/d; /^Output/d; /^SELECT/d; /^PREPARE/d; /^$/d' out.txt
+-- psql -f out.txt

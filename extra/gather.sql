@@ -1,15 +1,16 @@
----- Gather Performance Info Script
+---- Gather Performance metics and server configuration
 ---- Version 1 for PG 12+ 
 
 \pset tuples_only
 \echo '\\t'
 \echo '\\r'
 
-\echo COPY pg_connction FROM stdin;
+--Server information
+\echo COPY pg_srvr FROM stdin;
 \conninfo
 \echo '\\.'
 
-\echo COPY pg_collection FROM stdin;
+\echo COPY pg_gather FROM stdin;
 COPY (SELECT current_timestamp,current_user,current_database(),version(),pg_postmaster_start_time(),pg_is_in_recovery(),inet_client_addr(),inet_server_addr(),pg_conf_load_time() ) TO stdin;
 \echo '\\.'
 
@@ -21,11 +22,24 @@ COPY (SELECT current_timestamp,current_user,current_database(),version(),pg_post
 --INSERT statements
 --SELECT 'SELECT pg_sleep(1);  SELECT ''INSERT INTO pg_get_wait VALUES (' || g ||',''|| pid || '','' || CASE WHEN wait_event IS NULL THEN ''NULL);'' ELSE ''''''''|| wait_event ||'''''');'' END  FROM pg_stat_activity WHERE state != ''idle'';' FROM generate_series(1,10) g;
 --\gexec
-\echo COPY pg_get_wait (itr,pid,wait_event) FROM stdin;
-SELECT 'SELECT pg_sleep(1);  SELECT ''' || g ||'''||E''\t''|| pid || E''\t'' || CASE WHEN wait_event IS NULL THEN ''\N'' ELSE  wait_event END  FROM pg_stat_get_activity(NULL) WHERE state != ''idle'';' FROM generate_series(1,10) g;
+-- SELECT pg_stat_get_backend_pid(s.backendid) AS pid, pg_stat_get_backend_wait_event(s.backendid) AS wait_event FROM (SELECT pg_stat_get_backend_idset() AS backendid) AS s WHERE pg_stat_get_backend_pid(s.backendid) is not null;
+
+--\echo COPY pg_get_wait (itr,pid,wait_event) FROM stdin;
+--SELECT 'SELECT pg_sleep(1);  SELECT ''' || g ||'''||E''\t''|| pid || E''\t'' || CASE WHEN wait_event IS NULL THEN ''\N'' ELSE  wait_event END  FROM pg_stat_get_activity(NULL) WHERE state != ''idle'';' FROM generate_series(1,10) g;
+--\gexec
+--\echo '\\.'
+--\a
+
+--A much lightweight implimentation 26/12/2020
+PREPARE pidevents AS
+SELECT pg_stat_get_backend_pid(s.backendid) || E'\t' || pg_stat_get_backend_wait_event(s.backendid) FROM (SELECT pg_stat_get_backend_idset() AS backendid) AS s WHERE pg_stat_get_backend_wait_event(s.backendid) NOT IN ('AutoVacuumMain','LogicalLauncherMain');
+\echo COPY pg_pid_wait (pid,wait_event) FROM stdin;
+SELECT 'SELECT pg_sleep(0.01); EXECUTE pidevents;' FROM generate_series(1,1000) g;
 \gexec
 \echo '\\.'
 \a
+
+
 --Ideas to try. Try writing to a seperate output file and run it here again
 --If not possible, develop a clean up script using sed
 
@@ -51,8 +65,8 @@ FROM pg_database d) TO stdin;
 \echo '\\.'
 
 --pg_settings information
-\echo COPY pg_get_confs (name,setting,unit,context) FROM stdin;
-COPY ( SELECT name,setting,unit,context FROM pg_settings ) TO stdin;
+\echo COPY pg_get_confs (name,setting,unit) FROM stdin;
+COPY ( SELECT name,setting,unit FROM pg_settings ) TO stdin;
 \echo '\\.'
 
 --Major tables and indexes in current schema
@@ -62,6 +76,86 @@ COPY (SELECT oid,relname,relkind,relnamespace FROM pg_class WHERE relnamespace N
 
 --Index usage info
 \echo COPY pg_get_index FROM stdin;
-COPY (SELECT indexrelid,indrelid,indisunique,indisprimary, pg_stat_get_numscans(indexrelid) from pg_index) TO stdin;
+COPY (SELECT indexrelid,indrelid,indisunique,indisprimary, pg_stat_get_numscans(indexrelid),pg_table_size(indexrelid) from pg_index) TO stdin;
 \echo '\\.'
 
+--Table usage Information
+\echo COPY pg_get_tab FROM stdin;
+COPY (select oid,relnamespace,pg_relation_size(oid),pg_table_size(oid),
+ CASE WHEN (pg_stat_get_last_autovacuum_time(oid) > pg_stat_get_last_vacuum_time(oid)) 
+    THEN pg_stat_get_last_autovacuum_time(oid) ELSE  pg_stat_get_last_vacuum_time(oid) END,
+ CASE WHEN (pg_stat_get_last_autoanalyze_time(oid) > pg_stat_get_last_analyze_time(oid))
+    THEN pg_stat_get_last_autoanalyze_time(oid) ELSE pg_stat_get_last_analyze_time(oid) END,
+ pg_stat_get_vacuum_count(oid)+pg_stat_get_autovacuum_count(oid)
+ FROM pg_class WHERE relkind in ('t','p','')) TO stdin;
+\echo '\\.'
+
+--Blocking information
+\echo COPY get_block FROM stdin;
+COPY (SELECT blocked_locks.pid  AS blocked_pid,
+       blocked_activity.usename  AS blocked_user,
+       blocked_activity.client_addr as blocked_client_addr,
+       blocked_activity.client_hostname as blocked_client_hostname,
+       blocked_activity.application_name as blocked_application_name,
+       blocked_activity.wait_event_type as blocked_wait_event_type,
+       blocked_activity.wait_event as blocked_wait_event,
+       blocked_activity.query   AS blocked_statement,
+       blocked_activity.xact_start AS blocked_xact_start,
+       blocking_locks.pid  AS blocking_pid,
+       blocking_activity.usename AS blocking_user,
+       blocking_activity.client_addr as blocking_client_addr,
+       blocking_activity.client_hostname as blocking_client_hostname,
+       blocking_activity.application_name as blocking_application_name,
+       blocking_activity.wait_event_type as blocking_wait_event_type,
+       blocking_activity.wait_event as blocking_wait_event,
+       blocking_activity.query AS current_statement_in_blocking_process,
+       blocking_activity.xact_start AS blocking_xact_start
+FROM  pg_catalog.pg_locks   blocked_locks
+   JOIN pg_catalog.pg_stat_activity blocked_activity ON blocked_activity.pid = blocked_locks.pid
+   JOIN pg_catalog.pg_locks         blocking_locks 
+        ON blocking_locks.locktype = blocked_locks.locktype
+        AND blocking_locks.DATABASE IS NOT DISTINCT FROM blocked_locks.DATABASE
+        AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation
+        AND blocking_locks.page IS NOT DISTINCT FROM blocked_locks.page
+        AND blocking_locks.tuple IS NOT DISTINCT FROM blocked_locks.tuple
+        AND blocking_locks.virtualxid IS NOT DISTINCT FROM blocked_locks.virtualxid
+        AND blocking_locks.transactionid IS NOT DISTINCT FROM blocked_locks.transactionid
+        AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid
+        AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid
+        AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid
+        AND blocking_locks.pid != blocked_locks.pid
+   JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_activity.pid = blocking_locks.pid
+WHERE NOT blocked_locks.granted ORDER BY blocked_activity.pid ) TO stdin;
+\echo '\\.'
+
+--Gather replication information
+--select * from pg_stat_replication;
+
+--Archive status
+
+--Bloat estimate on a 64bit machine with PG version above 9.0
+\echo COPY pg_tab_bloat FROM stdin;
+COPY ( SELECT
+table_oid, cc.relname AS tablename, cc.relpages,
+CEIL((cc.reltuples*((datahdr+ma- (CASE WHEN datahdr%ma=0 THEN ma ELSE datahdr%ma END))+nullhdr2+4))/(bs-20::float)) AS est_pages
+FROM (
+SELECT
+    ma,bs,table_oid,
+    (datawidth+(hdr+ma-(case when hdr%ma=0 THEN ma ELSE hdr%ma END)))::numeric AS datahdr,
+    (maxfracsum*(nullhdr+ma-(case when nullhdr%ma=0 THEN ma ELSE nullhdr%ma END))) AS nullhdr2
+FROM (
+    SELECT s.starelid as table_oid ,23 AS hdr, 8 AS ma, 8192 AS bs, SUM((1-stanullfrac)*stawidth) AS datawidth, MAX(stanullfrac) AS maxfracsum,
+    23 +( SELECT 1+count(*)/8  FROM pg_statistic s2 WHERE stanullfrac<>0 AND s.starelid = s2.starelid ) AS nullhdr
+    FROM pg_statistic s 
+    GROUP BY 1,2
+) AS foo
+) AS rs
+JOIN pg_class cc ON cc.oid = rs.table_oid
+JOIN pg_namespace nn ON cc.relnamespace = nn.oid AND nn.nspname <> 'information_schema' 
+) TO stdin;
+\echo '\\.'
+
+
+--Gather active session again
+
+--Table age
