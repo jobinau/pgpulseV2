@@ -11,7 +11,7 @@
 \echo '\\.'
 
 \echo COPY pg_gather FROM stdin;
-COPY (SELECT current_timestamp,current_user,current_database(),version(),pg_postmaster_start_time(),pg_is_in_recovery(),inet_client_addr(),inet_server_addr(),pg_conf_load_time() ) TO stdin;
+COPY (SELECT current_timestamp,current_user,current_database(),version(),pg_postmaster_start_time(),pg_is_in_recovery(),inet_client_addr(),inet_server_addr(),pg_conf_load_time(),pg_current_wal_lsn()) TO stdin;
 \echo '\\.'
 
 \echo COPY pg_get_activity (datid, pid ,usesysid ,application_name ,state ,query ,wait_event_type ,wait_event ,xact_start ,query_start ,backend_start ,state_change ,client_addr, client_hostname, client_port, backend_xid ,backend_xmin, backend_type,ssl ,sslversion ,sslcipher ,sslbits ,sslcompression ,ssl_client_dn ,ssl_client_serial,ssl_issuer_dn ,gss_auth ,gss_princ ,gss_enc) FROM stdin;
@@ -128,12 +128,21 @@ FROM  pg_catalog.pg_locks   blocked_locks
 WHERE NOT blocked_locks.granted ORDER BY blocked_activity.pid ) TO stdin;
 \echo '\\.'
 
---Gather replication information
 --select * from pg_stat_replication;
+\echo COPY pg_replication_stat FROM stdin;
+COPY ( 
+   SELECT usename, client_addr, client_hostname, state, sent_lsn, replay_lsn, flush_lsn, replay_lsn, sync_state  FROM pg_stat_replication
+) TO stdin;
+\echo '\\.'
 
 --Archive status
+\echo COPY pg_archiver_stat FROM stdin;
+COPY (
+select archived_count,last_archived_wal,last_archived_time,last_failed_wal,last_failed_time from pg_stat_archiver
+) TO stdin;
+\echo '\\.'
 
---Bloat estimate on a 64bit machine with PG version above 9.0
+--Bloat estimate on a 64bit machine with PG version above 9.0. 
 \echo COPY pg_tab_bloat FROM stdin;
 COPY ( SELECT
 table_oid, cc.relname AS tablename, cc.relpages,

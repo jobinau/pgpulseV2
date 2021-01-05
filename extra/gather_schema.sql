@@ -1,6 +1,6 @@
 --Schema for using with gather.sql v1
 
-DROP TABLE pg_gather,pg_get_activity,pg_get_class,pg_get_confs,pg_get_db,pg_get_index,pg_get_tab,pg_get_wait,pg_srvr,get_block,pg_pid_wait;
+DROP TABLE pg_gather,pg_get_activity,pg_get_class,pg_get_confs,pg_get_db,pg_get_index,pg_get_tab,pg_get_wait,pg_srvr,get_block,pg_pid_wait,pg_replication_stat,pg_archiver_stat,pg_tab_bloat;
 
 CREATE TABLE pg_srvr (
     connstr text
@@ -15,7 +15,8 @@ CREATE TABLE pg_gather (
     recovery bool,
     client inet,
     server inet,
-    reload_ts timestamp with time zone
+    reload_ts timestamp with time zone,
+    current_wal pg_lsn
 );
 
 CREATE TABLE pg_get_activity (
@@ -151,6 +152,14 @@ CREATE TABLE pg_replication_stat (
     flush_lsn pg_lsn,
     replay_lsn pg_lsn,
     sync_state text
+);
+
+CREATE TABLE pg_archiver_stat(
+    archived_count bigint,
+    last_archived_wal text,
+    last_archived_time timestamp with time zone,
+    last_failed_wal text,
+    last_failed_time timestamp with time zone
 );
 
 
