@@ -1,6 +1,6 @@
 --Schema for using with gather.sql v1
 
-DROP TABLE pg_gather,pg_get_activity,pg_get_class,pg_get_confs,pg_get_db,pg_get_index,pg_get_tab,pg_get_wait,pg_srvr,get_block,pg_pid_wait,pg_replication_stat,pg_archiver_stat,pg_tab_bloat;
+DROP TABLE pg_gather,pg_get_activity,pg_get_class,pg_get_confs,pg_get_db,pg_get_index,pg_get_rel,pg_get_wait,pg_srvr,get_block,pg_pid_wait,pg_replication_stat,pg_archiver_stat,pg_tab_bloat,pg_get_toast;
 
 CREATE TABLE pg_srvr (
     connstr text
@@ -108,11 +108,14 @@ CREATE TABLE pg_get_index (
 --indexrelid - oid of the index
 --indrelid - oid of the corresponding table
 
-CREATE TABLE pg_get_tab (
+CREATE TABLE pg_get_rel (
     relid oid,
     relnamespace oid,
+    blks bigint,
     rel_size bigint,
-    tab_size bigint,
+    rel_ind_size bigint,
+    tot_tab_size bigint,
+    rel_age bigint,
     last_vac timestamp with time zone,
     last_anlyze timestamp with time zone,
     vac_nos bigint
@@ -160,6 +163,12 @@ CREATE TABLE pg_archiver_stat(
     last_archived_time timestamp with time zone,
     last_failed_wal text,
     last_failed_time timestamp with time zone
+);
+
+
+CREATE TABLE pg_get_toast(
+    relid oid,
+    toastid oid
 );
 
 

@@ -1,12 +1,12 @@
 
-# pgPulse
+# pgPulseV2
 
-pgPulse is a database performance snapshoting tool to capture database performance and sizeing related information available within the database
+pgPulseV2 is a database performance snapshoting tool to capture database performance and sizeing related information available within the database
 
 Historical performance information can be maintained in same or remote database. These historical performace and sizing data can be used for analysis purpose.
 
 # History
- This repository is a fork of original pgpluse repository of Avinash Vallarapu. Which is again inspired by other projects like PgOn (Openwatch)
+ This work started as a fork of original pgpluse repository of Avinash Vallarapu.  Which is again inspired by other projects like PgOn (Openwatch). But codebase is completely rewritten for portability, simplicity and lightweightness.
 
 This is an effort to modernize code base and consolidate different scripts which are already existing to address the similar problem.
 As of now, code is diverged so from the upstream.
@@ -36,4 +36,7 @@ Master  Repo: https://github.com/jobinau/pgpulseV2
     This will generate and output file as specified. in this case it is pgPulse_TestDB.py
 
 ## Notes:
-* For very old python versions like 2.4, simplejson module need to be installed
+* For very old python versions like 2.4, simplejson module need to be installed. 
+
+## Extra:
+This project contains a "extra" folder with pgpulse data collection implimented as shell script. It might be slightly heavy as it reconnects repeatedly to databases.

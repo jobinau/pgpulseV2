@@ -17,7 +17,7 @@ COPY (SELECT current_timestamp,current_user,current_database(),version(),pg_post
 \echo COPY pg_get_activity (datid, pid ,usesysid ,application_name ,state ,query ,wait_event_type ,wait_event ,xact_start ,query_start ,backend_start ,state_change ,client_addr, client_hostname, client_port, backend_xid ,backend_xmin, backend_type,ssl ,sslversion ,sslcipher ,sslbits ,sslcompression ,ssl_client_dn ,ssl_client_serial,ssl_issuer_dn ,gss_auth ,gss_princ ,gss_enc) FROM stdin;
 \copy (select * from  pg_stat_get_activity(NULL) where pid != pg_backend_pid()) to stdin
 \echo '\\.'
-\a
+
 
 --INSERT statements
 --SELECT 'SELECT pg_sleep(1);  SELECT ''INSERT INTO pg_get_wait VALUES (' || g ||',''|| pid || '','' || CASE WHEN wait_event IS NULL THEN ''NULL);'' ELSE ''''''''|| wait_event ||'''''');'' END  FROM pg_stat_activity WHERE state != ''idle'';' FROM generate_series(1,10) g;
@@ -31,6 +31,7 @@ COPY (SELECT current_timestamp,current_user,current_database(),version(),pg_post
 --\a
 
 --A much lightweight implimentation 26/12/2020
+\a
 PREPARE pidevents AS
 SELECT pg_stat_get_backend_pid(s.backendid) || E'\t' || pg_stat_get_backend_wait_event(s.backendid) FROM (SELECT pg_stat_get_backend_idset() AS backendid) AS s WHERE pg_stat_get_backend_wait_event(s.backendid) NOT IN ('AutoVacuumMain','LogicalLauncherMain');
 \echo COPY pg_pid_wait (pid,wait_event) FROM stdin;
@@ -80,14 +81,14 @@ COPY (SELECT indexrelid,indrelid,indisunique,indisprimary, pg_stat_get_numscans(
 \echo '\\.'
 
 --Table usage Information
-\echo COPY pg_get_tab FROM stdin;
-COPY (select oid,relnamespace,pg_relation_size(oid),pg_table_size(oid),
+\echo COPY pg_get_rel FROM stdin;
+COPY (select oid,relnamespace, relpages::bigint blks,pg_relation_size(oid) only_tab_size, pg_total_relation_size(oid) "tab+idx", pg_table_size(oid) tot_tab_size, age(relfrozenxid) rel_age,
  CASE WHEN (pg_stat_get_last_autovacuum_time(oid) > pg_stat_get_last_vacuum_time(oid)) 
     THEN pg_stat_get_last_autovacuum_time(oid) ELSE  pg_stat_get_last_vacuum_time(oid) END,
  CASE WHEN (pg_stat_get_last_autoanalyze_time(oid) > pg_stat_get_last_analyze_time(oid))
     THEN pg_stat_get_last_autoanalyze_time(oid) ELSE pg_stat_get_last_analyze_time(oid) END,
  pg_stat_get_vacuum_count(oid)+pg_stat_get_autovacuum_count(oid)
- FROM pg_class WHERE relkind in ('t','p','')) TO stdin;
+ FROM pg_class WHERE relkind in ('r','t','p','')) TO stdin;
 \echo '\\.'
 
 --Blocking information
@@ -165,6 +166,17 @@ JOIN pg_namespace nn ON cc.relnamespace = nn.oid AND nn.nspname <> 'information_
 \echo '\\.'
 
 
---Gather active session again
+--Toast
+\echo COPY pg_get_toast FROM stdin;
+COPY (
+SELECT oid, reltoastrelid FROM pg_class WHERE reltoastrelid != 0 ) TO stdin;
+\echo '\\.'
 
---Table age
+
+--active session again
+\a
+\echo COPY pg_pid_wait (pid,wait_event) FROM stdin;
+SELECT 'SELECT pg_sleep(0.01); EXECUTE pidevents;' FROM generate_series(1,1000) g;
+\gexec
+\echo '\\.'
+\a
