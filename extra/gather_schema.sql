@@ -112,6 +112,8 @@ CREATE TABLE pg_get_rel (
     relid oid,
     relnamespace oid,
     blks bigint,
+    n_live_tup bigint,
+    n_dead_tup bigint,
     rel_size bigint,
     tot_tab_size bigint,
     tab_ind_size bigint,
@@ -182,5 +184,7 @@ CREATE TABLE pg_tab_bloat (
 
 
 -- psql -f gather.sql > out.txt
--- sed -i '/^Pager/d; /^Tuples/d; /^Output/d; /^SELECT/d; /^PREPARE/d; /^$/d' out.txt
--- psql -f out.txt
+-- sed -i '/^Pager/d; /^Tuples/d; /^Output/d; /^SELECT/d; /^PREPARE/d; /^$/d' out.txt; psql -f gather_schema.sql -f out.txt
+
+---Report
+-- psql -q -X -f gather_report.sql > out.html
